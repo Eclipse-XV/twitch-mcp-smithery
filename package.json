@@ -1,0 +1,24 @@
+{
+	"name": "twitch-mcp-server",
+	"version": "1.0.0",
+	"description": "A comprehensive Twitch MCP server providing chat moderation, stream management, and Twitch API integration tools",
+	"main": "index.js",
+	"module": "./src/index.ts",
+	"type": "module",
+	"scripts": {
+		"dev": "npx @smithery/cli dev",
+		"build": "npx tsx src/index.ts",
+		"test": "npx tsx src/index.ts"
+	},
+	"keywords": ["twitch", "mcp", "chat", "moderation", "streaming", "api"],
+	"author": "Eclipse-XV",
+	"license": "ISC",
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.12.1",
+		"zod": "^3.25.46"
+	},
+	"devDependencies": {
+		"@smithery/cli": "^1.2.4",
+		"tsx": "^4.19.4"
+	}
+}
