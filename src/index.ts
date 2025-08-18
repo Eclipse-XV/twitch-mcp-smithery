@@ -1,14 +1,57 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Client } from "tmi.js";
+import { AutonomousMonitor } from "./autonomous-monitor.js";
+import { AutonomousConfig, ChatMessage as AutonomousChatMessage } from "./autonomous-types.js";
 
-// Configuration schema for Twitch API credentials
+// Configuration schema for Twitch API credentials and autonomous features
 export const configSchema = z.object({
   debug: z.boolean().default(false).describe("Enable debug logging"),
   twitchClientId: z.string().describe("Twitch Client ID for API access"),
   twitchAuthToken: z.string().describe("Twitch OAuth token (without 'oauth:' prefix)"),
   twitchBroadcasterId: z.string().describe("Twitch broadcaster user ID"),
   twitchChannel: z.string().describe("Twitch channel name for chat monitoring"),
+  
+  // Autonomous monitoring configuration
+  autonomous: z.object({
+    enabled: z.boolean().default(false).describe("Enable autonomous chat monitoring"),
+    monitoringInterval: z.number().default(30000).describe("Chat analysis interval in milliseconds"),
+    feedbackDir: z.string().default("./autonomous-feedback").describe("Directory for feedback and learning data"),
+    maxFeedbackRetentionDays: z.number().default(30).describe("Days to keep feedback files"),
+    
+    rules: z.object({
+      spamDetection: z.object({
+        enabled: z.boolean().default(true).describe("Enable spam detection"),
+        threshold: z.number().default(5).describe("Messages per minute threshold"),
+        action: z.enum(['timeout', 'ban', 'warn']).default('timeout').describe("Action to take"),
+        duration: z.number().default(300).optional().describe("Timeout duration in seconds")
+      }),
+      
+      toxicityDetection: z.object({
+        enabled: z.boolean().default(true).describe("Enable toxicity detection"),
+        severityThreshold: z.number().default(6).describe("Minimum severity (1-10) to trigger action"),
+        action: z.enum(['timeout', 'ban', 'warn']).default('timeout').describe("Action to take"),
+        duration: z.number().default(1800).optional().describe("Timeout duration in seconds")
+      }),
+      
+      chatEngagement: z.object({
+        enabled: z.boolean().default(true).describe("Enable chat engagement"),
+        quietPeriodThreshold: z.number().default(10).describe("Minutes of quiet before engagement"),
+        responses: z.array(z.string()).default([
+          "How's everyone doing today?",
+          "What would you like to see next?",
+          "Thanks for hanging out in chat!",
+          "Any questions about what we're doing?"
+        ]).describe("Pool of engagement messages")
+      }),
+      
+      pollAutomation: z.object({
+        enabled: z.boolean().default(false).describe("Enable automatic poll creation"),
+        trigger: z.enum(['viewerRequest', 'scheduled', 'gameEvent']).default('viewerRequest').describe("When to trigger polls"),
+        cooldown: z.number().default(30).describe("Minutes between polls")
+      })
+    })
+  }).optional().describe("Autonomous monitoring configuration")
 });
 
 // Types for API responses and data structures
@@ -574,6 +617,316 @@ export default function createStatelessServer({
         const err = error as TwitchApiError;
         return {
           content: [{ type: "text", text: `Failed to update stream category: ${err.message}` }]
+        };
+      }
+    }
+  );
+
+  // Initialize autonomous monitor if configured
+  let autonomousMonitor: AutonomousMonitor | null = null;
+  
+  if (config.autonomous) {
+    // AI analysis function for autonomous features
+    const aiAnalyzeFunction = async (prompt: string): Promise<string> => {
+      // This is a placeholder - in a real implementation, this would call
+      // an AI service like OpenAI, Claude, etc.
+      // For now, return a simple analysis
+      return JSON.stringify({
+        analysis: "AI analysis placeholder",
+        confidence: 0.5,
+        recommendation: "Monitor situation"
+      });
+    };
+
+    // MCP tool executor for autonomous actions
+    const mcpToolExecutor = async (toolName: string, parameters: Record<string, any>) => {
+      try {
+        // Execute the tool using the server's tool handlers
+        switch (toolName) {
+          case 'sendMessageToChat':
+            await tmiClient.say(`#${config.twitchChannel}`, parameters.message);
+            addChatMessage(config.twitchChannel, `[AUTONOMOUS] ${parameters.message}`);
+            return { success: true, result: 'Message sent' };
+            
+          case 'timeoutUser':
+            const userId = await getUserIdFromUsername(parameters.usernameOrDescriptor);
+            if (userId) {
+              await makeTwitchApiCall('/moderation/bans', 'POST', {
+                broadcaster_id: config.twitchBroadcasterId,
+                moderator_id: config.twitchBroadcasterId,
+                data: {
+                  user_id: userId,
+                  reason: parameters.reason || 'Autonomous moderation',
+                  duration: 300
+                }
+              });
+              return { success: true, result: `Timed out ${parameters.usernameOrDescriptor}` };
+            }
+            return { success: false, error: 'User not found' };
+            
+          case 'createTwitchPoll':
+            const choicesArray = parameters.choices.split(',').map((c: string) => ({ title: c.trim() }));
+            await makeTwitchApiCall('/polls', 'POST', {
+              broadcaster_id: config.twitchBroadcasterId,
+              title: parameters.title,
+              choices: choicesArray,
+              duration: parameters.duration
+            });
+            return { success: true, result: 'Poll created' };
+            
+          default:
+            return { success: false, error: `Unknown tool: ${toolName}` };
+        }
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    };
+
+    // Initialize autonomous monitor
+    autonomousMonitor = new AutonomousMonitor(
+      {
+        autonomous: config.autonomous,
+        feedbackDir: config.autonomous.feedbackDir,
+        maxFeedbackRetentionDays: config.autonomous.maxFeedbackRetentionDays
+      },
+      aiAnalyzeFunction,
+      mcpToolExecutor
+    );
+
+    // Feed chat messages to autonomous monitor
+    const originalAddChatMessage = addChatMessage;
+    addChatMessage = function(username: string, content: string) {
+      originalAddChatMessage(username, content);
+      
+      // Also feed to autonomous monitor
+      if (autonomousMonitor) {
+        autonomousMonitor.addChatMessages([{
+          username,
+          content,
+          timestamp: new Date()
+        }]);
+      }
+    };
+
+    // Start autonomous monitoring
+    if (config.autonomous.enabled) {
+      autonomousMonitor.start();
+    }
+  }
+
+  // AUTONOMOUS CONTROL TOOLS
+
+  // Tool: Start Autonomous Monitoring
+  server.tool(
+    "startAutonomousMonitoring",
+    "Start the autonomous chat monitoring system",
+    {},
+    async () => {
+      if (!autonomousMonitor) {
+        return {
+          content: [{ type: "text", text: "Autonomous monitoring is not configured. Please check server configuration." }]
+        };
+      }
+
+      try {
+        await autonomousMonitor.start();
+        return {
+          content: [{ type: "text", text: "✅ Autonomous chat monitoring started successfully!" }]
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to start autonomous monitoring: ${error instanceof Error ? error.message : 'Unknown error'}` }]
+        };
+      }
+    }
+  );
+
+  // Tool: Stop Autonomous Monitoring
+  server.tool(
+    "stopAutonomousMonitoring", 
+    "Stop the autonomous chat monitoring system",
+    {},
+    async () => {
+      if (!autonomousMonitor) {
+        return {
+          content: [{ type: "text", text: "Autonomous monitoring is not configured." }]
+        };
+      }
+
+      try {
+        await autonomousMonitor.stop();
+        return {
+          content: [{ type: "text", text: "✅ Autonomous chat monitoring stopped successfully!" }]
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to stop autonomous monitoring: ${error instanceof Error ? error.message : 'Unknown error'}` }]
+        };
+      }
+    }
+  );
+
+  // Tool: Get Autonomous Status
+  server.tool(
+    "getAutonomousStatus",
+    "Get the current status and statistics of the autonomous monitoring system",
+    {},
+    async () => {
+      if (!autonomousMonitor) {
+        return {
+          content: [{ type: "text", text: "Autonomous monitoring is not configured." }]
+        };
+      }
+
+      const state = autonomousMonitor.getState();
+      const debugInfo = autonomousMonitor.getDebugInfo();
+      
+      let status = `# Autonomous Monitoring Status\n\n`;
+      status += `**Active:** ${state.isActive ? '✅ Yes' : '❌ No'}\n`;
+      status += `**Running:** ${debugInfo.isRunning ? '✅ Yes' : '❌ No'}\n`;
+      status += `**Last Analysis:** ${state.lastAnalysis.toISOString()}\n`;
+      status += `**Recent Messages:** ${debugInfo.recentMessagesCount}\n\n`;
+      
+      status += `## Today's Statistics\n\n`;
+      status += `- **Actions Taken:** ${state.statistics.actionsToday}\n`;
+      status += `- **Success Rate:** ${(state.statistics.successRate * 100).toFixed(1)}%\n`;
+      status += `- **Average Confidence:** ${state.statistics.averageConfidence.toFixed(2)}\n`;
+      status += `- **Most Common Action:** ${state.statistics.mostCommonAction || 'None'}\n\n`;
+      
+      status += `## Recent Actions\n\n`;
+      if (state.recentActions.length > 0) {
+        for (const action of state.recentActions.slice(-5)) {
+          const timeStr = action.timestamp.toISOString().split('T')[1].split('.')[0];
+          status += `- **${timeStr}**: ${action.action} (${action.reason})\n`;
+        }
+      } else {
+        status += `No recent actions taken.\n`;
+      }
+      
+      return {
+        content: [{ type: "text", text: status }]
+      };
+    }
+  );
+
+  // Tool: Force Immediate Analysis
+  server.tool(
+    "forceAutonomousAnalysis",
+    "Force an immediate chat analysis and potential action by the autonomous system",
+    {},
+    async () => {
+      if (!autonomousMonitor) {
+        return {
+          content: [{ type: "text", text: "Autonomous monitoring is not configured." }]
+        };
+      }
+
+      try {
+        const result = await autonomousMonitor.forceAnalysis();
+        
+        let report = `# Forced Analysis Results\n\n`;
+        report += `**Patterns Detected:** ${result.patterns.length}\n`;
+        report += `**Potential Actions:** ${result.decisions.length}\n`;
+        report += `**Actions Executed:** ${result.executed.length}\n\n`;
+        
+        if (result.executed.length > 0) {
+          report += `## Actions Taken\n\n`;
+          for (const action of result.executed) {
+            report += `- **${action.action}**: ${action.reason} (Confidence: ${action.confidence})\n`;
+          }
+        }
+        
+        if (result.patterns.length > 0) {
+          report += `\n## Patterns Detected\n\n`;
+          for (const pattern of result.patterns) {
+            report += `- **${pattern.type}**: Severity ${pattern.severity}/10, Confidence ${pattern.confidence}\n`;
+          }
+        }
+        
+        return {
+          content: [{ type: "text", text: report }]
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `❌ Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}` }]
+        };
+      }
+    }
+  );
+
+  // Tool: Add User Feedback
+  server.tool(
+    "addUserFeedbackToAutonomous",
+    "Provide feedback on an autonomous action to help improve the system",
+    {
+      rating: z.number().int().min(1).max(5).describe("Rating from 1 (poor) to 5 (excellent)"),
+      comment: z.string().optional().describe("Optional comment about the action")
+    },
+    async ({ rating, comment }) => {
+      if (!autonomousMonitor) {
+        return {
+          content: [{ type: "text", text: "Autonomous monitoring is not configured." }]
+        };
+      }
+
+      // Find the most recent action (within last 10 minutes)
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+      const state = autonomousMonitor.getState();
+      const recentAction = state.recentActions
+        .filter(a => a.timestamp >= tenMinutesAgo)
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())[0];
+      
+      if (!recentAction) {
+        return {
+          content: [{ type: "text", text: "No recent autonomous actions found to provide feedback on." }]
+        };
+      }
+
+      try {
+        const success = await autonomousMonitor.addUserFeedback(
+          recentAction.timestamp,
+          rating as 1 | 2 | 3 | 4 | 5,
+          comment,
+          'manual'
+        );
+
+        if (success) {
+          return {
+            content: [{ type: "text", text: `✅ Thank you! Feedback recorded for action: ${recentAction.action}\nRating: ${rating}/5${comment ? `\nComment: ${comment}` : ''}` }]
+          };
+        } else {
+          return {
+            content: [{ type: "text", text: "❌ Failed to record feedback. Action may be too old." }]
+          };
+        }
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `❌ Error recording feedback: ${error instanceof Error ? error.message : 'Unknown error'}` }]
+        };
+      }
+    }
+  );
+
+  // Tool: Generate Performance Report
+  server.tool(
+    "generateAutonomousReport",
+    "Generate a comprehensive performance report for the autonomous monitoring system",
+    {},
+    async () => {
+      if (!autonomousMonitor) {
+        return {
+          content: [{ type: "text", text: "Autonomous monitoring is not configured." }]
+        };
+      }
+
+      try {
+        const report = await autonomousMonitor.generatePerformanceReport();
+        return {
+          content: [{ type: "text", text: report }]
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to generate report: ${error instanceof Error ? error.message : 'Unknown error'}` }]
         };
       }
     }
