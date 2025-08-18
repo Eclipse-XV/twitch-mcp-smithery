@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { Client } from "tmi.js";
 
 // Configuration schema for Twitch API credentials
 export const configSchema = z.object({
@@ -56,6 +57,54 @@ export default function createStatelessServer({
   // In-memory chat message storage (in production, you might want to use a database)
   let recentMessages: ChatMessage[] = [];
   const MAX_MESSAGES = 100;
+
+  // Initialize Twitch IRC client
+  const tmiClient = new Client({
+    options: { debug: config.debug },
+    connection: {
+      secure: true,
+      reconnect: true,
+    },
+    identity: {
+      username: config.twitchChannel,
+      password: `oauth:${config.twitchAuthToken}`
+    },
+    channels: [`#${config.twitchChannel}`]
+  });
+
+  // Connect to Twitch IRC
+  let ircConnected = false;
+  tmiClient.connect().then(() => {
+    ircConnected = true;
+    if (config.debug) {
+      console.log('Connected to Twitch IRC');
+    }
+  }).catch((error) => {
+    console.error('Failed to connect to Twitch IRC:', error);
+  });
+
+  // Listen for incoming chat messages and add them to our log
+  tmiClient.on('message', (channel, tags, message, self) => {
+    if (!self) { // Don't log our own messages
+      addChatMessage(tags.username || 'unknown', message);
+    }
+  });
+
+  // Function to ensure IRC connection is ready
+  async function ensureIrcConnection(): Promise<boolean> {
+    if (ircConnected) {
+      return true;
+    }
+    
+    try {
+      await tmiClient.connect();
+      ircConnected = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to establish IRC connection:', error);
+      return false;
+    }
+  }
 
   // Utility function to make Twitch API calls
   async function makeTwitchApiCall(
@@ -220,13 +269,30 @@ export default function createStatelessServer({
       message: z.string().describe("The message to send to chat")
     },
     async ({ message }) => {
-      // In a real implementation, this would send via IRC/WebSocket
-      // For now, we simulate by adding it to our message log
-      addChatMessage(config.twitchChannel, `[BOT] ${message}`);
-      
-      return {
-        content: [{ type: "text", text: `Successfully sent message: ${message}` }]
-      };
+      try {
+        // Ensure IRC connection is ready
+        const connected = await ensureIrcConnection();
+        if (!connected) {
+          return {
+            content: [{ type: "text", text: `Failed to send message: IRC connection not available` }]
+          };
+        }
+
+        // Send the message to Twitch chat via IRC
+        await tmiClient.say(`#${config.twitchChannel}`, message);
+        
+        // Add to our local message log for analysis
+        addChatMessage(config.twitchChannel, `[BOT] ${message}`);
+        
+        return {
+          content: [{ type: "text", text: `Successfully sent message to Twitch chat: ${message}` }]
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return {
+          content: [{ type: "text", text: `Failed to send message: ${errorMessage}` }]
+        };
+      }
     }
   );
 

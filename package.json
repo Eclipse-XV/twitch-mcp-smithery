@@ -10,11 +10,19 @@
 		"build": "npx tsx src/index.ts",
 		"test": "npx tsx src/index.ts"
 	},
-	"keywords": ["twitch", "mcp", "chat", "moderation", "streaming", "api"],
+	"keywords": [
+		"twitch",
+		"mcp",
+		"chat",
+		"moderation",
+		"streaming",
+		"api"
+	],
 	"author": "Eclipse-XV",
 	"license": "ISC",
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.12.1",
+		"tmi.js": "^1.8.5",
 		"zod": "^3.25.46"
 	},
 	"devDependencies": {
