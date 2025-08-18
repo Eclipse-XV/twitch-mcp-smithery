@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="810" viewBox="0 0 1440 810" fill="none">
+  <rect width="1440" height="810" fill="#0B0F17"/>
+  <g font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" fill="#E6EDF3">
+    <text x="72" y="100" font-size="48" font-weight="700">Twitch MCP: Quick Setup Checklist</text>
+
+    <g font-size="28" font-weight="600">
+      <text x="72" y="180">1. Generate token at twitchtokengenerator.com</text>
+      <text x="72" y="230">   • Select scopes: polls, predictions, broadcast, clips:edit, chat:read/edit, moderator:manage/read</text>
+
+      <text x="72" y="300">2. Get Broadcaster ID at streamweasels.com (username → numeric ID)</text>
+      <text x="72" y="350">   • Also note your channel name (your username)</text>
+
+      <text x="72" y="420">3. Configure on smithery.ai/server/@Eclipse-XV/twitch-mcp-smithery</text>
+      <text x="72" y="470">   • Paste Client ID, Access Token (no 'oauth:'), Broadcaster ID, Channel</text>
+
+      <text x="72" y="540">4. Test in Playground</text>
+      <text x="72" y="590">   • “Send a message to chat: Hello from MCP!” or “Create a poll ‘A, B’ for 60s”</text>
+
+      <text x="72" y="660">5. One-click Add to Cursor → Approve → Re-run the test</text>
+    </g>
+
+    <g font-size="22" fill="#AAB6C3">
+      <text x="72" y="730">Tip: Actions run as your broadcaster account. Keep your token private; regenerate if needed.</text>
+    </g>
+  </g>
+</svg>
+

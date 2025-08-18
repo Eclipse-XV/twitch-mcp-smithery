@@ -1,3 +1,35 @@
 .smithery
 node_modules
 .env
+
+# Env and credentials
+.env.*
+.env.local
+credentials.json
+smithery-keys.json
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Build outputs and coverage
+/dist/
+/build/
+/coverage/
+
+# Logs
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Large media/design files (keep .md and .svg docs)
+video-guide/**/*.mp4
+video-guide/**/*.mov
+video-guide/**/*.wav
+video-guide/**/*.zip
+video-guide/**/*.psd
+video-guide/**/*.ai
+video-guide/output/
+video-assets/

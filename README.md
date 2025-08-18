@@ -2,6 +2,17 @@
 
 A comprehensive Twitch MCP (Model Context Protocol) server providing chat moderation, stream management, and Twitch API integration for AI systems.
 
+## For Streamers
+
+- Use this server via Smithery → Cursor (no local install needed)
+- Quick setup guide: video-guide/final-setup-guide.md
+- Smithery server page (Playground + one‑click add to Cursor): https://smithery.ai/server/@Eclipse-XV/twitch-mcp-smithery
+- Recommended first tests:
+  - "Send a message to chat: Hello from MCP!"
+  - "Create a poll titled 'Which map?' with choices 'A, B' for 60 seconds"
+
+Note: Actions run as your broadcaster account. Test in Smithery Playground first, then use the Connect section to one‑click add to Cursor and approve.
+
 ## Overview
 
 This MCP server allows AI agents to interact with Twitch streams through a standardized set of tools. It supports:
