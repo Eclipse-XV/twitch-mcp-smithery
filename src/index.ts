@@ -421,9 +421,10 @@ export default function createStatelessServer({
     "Timeout a user in the Twitch chat. If no username is provided, it will return the recent chat log for LLM review.",
     {
       usernameOrDescriptor: z.string().describe("Username or descriptor to timeout (e.g. 'toxic', 'spammer', or a username)"),
-      reason: z.string().optional().describe("Reason for timeout (optional)")
+      reason: z.string().optional().describe("Reason for timeout (optional)"),
+      duration: z.number().int().optional().describe("Timeout duration in seconds (1-1209600). If not provided, duration will be guessed based on the reason.")
     },
-    async ({ usernameOrDescriptor, reason }) => {
+    async ({ usernameOrDescriptor, reason, duration }) => {
       try {
         const targetUser = resolveModerationTarget(usernameOrDescriptor);
         
@@ -442,20 +443,18 @@ export default function createStatelessServer({
         }
 
         const timeoutReason = reason || "inappropriate behavior";
-        const duration = guessTimeoutDuration(timeoutReason);
+        const timeoutDuration = duration || guessTimeoutDuration(timeoutReason);
         
         await makeTwitchApiCall('/moderation/bans', 'POST', {
           broadcaster_id: config.twitchBroadcasterId,
           moderator_id: config.twitchBroadcasterId,
-          data: {
-            user_id: userId,
-            reason: timeoutReason,
-            duration
-          }
+          user_id: userId,
+          reason: timeoutReason,
+          duration: timeoutDuration
         });
 
         return {
-          content: [{ type: "text", text: `Successfully timed out ${targetUser} for ${duration} seconds. Reason: ${timeoutReason}` }]
+          content: [{ type: "text", text: `Successfully timed out ${targetUser} for ${timeoutDuration} seconds. Reason: ${timeoutReason}` }]
         };
       } catch (error) {
         const err = error as TwitchApiError;
@@ -497,10 +496,8 @@ export default function createStatelessServer({
         await makeTwitchApiCall('/moderation/bans', 'POST', {
           broadcaster_id: config.twitchBroadcasterId,
           moderator_id: config.twitchBroadcasterId,
-          data: {
-            user_id: userId,
-            reason: banReason
-          }
+          user_id: userId,
+          reason: banReason
         });
 
         return {
