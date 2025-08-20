@@ -457,14 +457,22 @@ export default function createStatelessServer({
         }
 
         const timeoutReason = reason || "inappropriate behavior";
-        const timeoutDuration = duration || guessTimeoutDuration(timeoutReason);
+        let timeoutDuration = duration || guessTimeoutDuration(timeoutReason);
         
-        await makeTwitchApiCall('/moderation/bans', 'POST', {
-          broadcaster_id: config.twitchBroadcasterId,
-          moderator_id: config.twitchBroadcasterId,
-          user_id: userId,
-          reason: timeoutReason,
-          duration: timeoutDuration
+        // Validate duration is within Twitch's allowed range (1 second to 1209600 seconds = 14 days)
+        if (timeoutDuration < 1 || timeoutDuration > 1209600) {
+          return {
+            content: [{ type: "text", text: `Invalid timeout duration: ${timeoutDuration} seconds. Duration must be between 1 and 1209600 seconds (14 days).` }]
+          };
+        }
+        
+        // Timeout request - data must be wrapped in 'data' array, broadcaster_id and moderator_id as query params
+        await makeTwitchApiCall(`/moderation/bans?broadcaster_id=${config.twitchBroadcasterId}&moderator_id=${config.twitchBroadcasterId}`, 'POST', {
+          data: {
+            user_id: userId,
+            duration: timeoutDuration,
+            reason: timeoutReason
+          }
         });
 
         return {
@@ -507,11 +515,13 @@ export default function createStatelessServer({
 
         const banReason = reason || "severe violation of chat rules";
         
-        await makeTwitchApiCall('/moderation/bans', 'POST', {
-          broadcaster_id: config.twitchBroadcasterId,
-          moderator_id: config.twitchBroadcasterId,
-          user_id: userId,
-          reason: banReason
+        // Ban request - data must be wrapped in 'data' object, broadcaster_id and moderator_id as query params
+        await makeTwitchApiCall(`/moderation/bans?broadcaster_id=${config.twitchBroadcasterId}&moderator_id=${config.twitchBroadcasterId}`, 'POST', {
+          data: {
+            user_id: userId,
+            reason: banReason
+            // No duration means permanent ban
+          }
         });
 
         return {
