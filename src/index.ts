@@ -462,11 +462,9 @@ export default function createStatelessServer({
         await makeTwitchApiCall('/moderation/bans', 'POST', {
           broadcaster_id: config.twitchBroadcasterId,
           moderator_id: config.twitchBroadcasterId,
-          data: {
-            user_id: userId,
-            reason: timeoutReason,
-            duration: timeoutDuration
-          }
+          user_id: userId,
+          reason: timeoutReason,
+          duration: timeoutDuration
         });
 
         return {
@@ -512,10 +510,8 @@ export default function createStatelessServer({
         await makeTwitchApiCall('/moderation/bans', 'POST', {
           broadcaster_id: config.twitchBroadcasterId,
           moderator_id: config.twitchBroadcasterId,
-          data: {
-            user_id: userId,
-            reason: banReason
-          }
+          user_id: userId,
+          reason: banReason
         });
 
         return {
