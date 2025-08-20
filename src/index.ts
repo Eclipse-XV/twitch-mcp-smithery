@@ -278,14 +278,28 @@ export default function createStatelessServer({
           };
         }
 
+        // Twitch IRC has a 500 character limit per message
+        // Check if message exceeds the limit and handle accordingly
+        const TWITCH_MESSAGE_LIMIT = 500;
+        let messageToSend = message;
+        let resultText = '';
+        
+        if (message.length > TWITCH_MESSAGE_LIMIT) {
+          // Truncate the message and add an indicator
+          messageToSend = message.substring(0, TWITCH_MESSAGE_LIMIT - 3) + '...';
+          resultText = `Message was truncated from ${message.length} to ${messageToSend.length} characters due to Twitch's 500 character limit. Sent: "${messageToSend}"`;
+        } else {
+          resultText = `Successfully sent message to Twitch chat: ${messageToSend}`;
+        }
+
         // Send the message to Twitch chat via IRC
-        await tmiClient.say(`#${config.twitchChannel}`, message);
+        await tmiClient.say(`#${config.twitchChannel}`, messageToSend);
         
         // Add to our local message log for analysis
-        addChatMessage(config.twitchChannel, `[BOT] ${message}`);
+        addChatMessage(config.twitchChannel, `[BOT] ${messageToSend}`);
         
         return {
-          content: [{ type: "text", text: `Successfully sent message to Twitch chat: ${message}` }]
+          content: [{ type: "text", text: resultText }]
         };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -448,9 +462,11 @@ export default function createStatelessServer({
         await makeTwitchApiCall('/moderation/bans', 'POST', {
           broadcaster_id: config.twitchBroadcasterId,
           moderator_id: config.twitchBroadcasterId,
-          user_id: userId,
-          reason: timeoutReason,
-          duration: timeoutDuration
+          data: {
+            user_id: userId,
+            reason: timeoutReason,
+            duration: timeoutDuration
+          }
         });
 
         return {
@@ -496,8 +512,10 @@ export default function createStatelessServer({
         await makeTwitchApiCall('/moderation/bans', 'POST', {
           broadcaster_id: config.twitchBroadcasterId,
           moderator_id: config.twitchBroadcasterId,
-          user_id: userId,
-          reason: banReason
+          data: {
+            user_id: userId,
+            reason: banReason
+          }
         });
 
         return {

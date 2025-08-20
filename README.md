@@ -102,6 +102,23 @@ The timeout tool automatically suggests an appropriate duration based on the sev
 - Severe violations: 60 minutes
 - Other violations: 10 minutes (default)
 
+## Known Issues & Limitations
+
+### Image Description Support
+
+While AI assistants (like Cursor/Claude) can process and describe images, there are some considerations when using this with the Twitch MCP server:
+
+- **Image processing**: Image analysis is handled by the AI client, not the MCP server itself
+- **Message length**: AI-generated descriptions can be quite long. Twitch chat has a 500 character limit per message
+- **Auto-truncation**: The `sendMessageToChat` tool now automatically truncates messages that exceed 500 characters and notifies you when this happens
+- **Workaround**: For detailed image descriptions, consider asking the AI to provide a shorter summary suitable for chat
+
+### Other Considerations
+
+- **API Rate Limits**: Twitch API has rate limits that may affect rapid successive calls
+- **Permissions**: Ensure your Twitch token has the necessary scopes for all desired features
+- **Stream Status**: Some tools (like creating clips) require an active stream
+
 ## License
 
 ISC
